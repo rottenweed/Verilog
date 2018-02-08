@@ -1,0 +1,5 @@
+;Name,      size,       I/O
+reset,      1,          i
+clk,        1,          i
+data_i,     8,          i
+data_o,     8,          o
