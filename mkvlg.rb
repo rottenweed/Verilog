@@ -17,26 +17,25 @@ VLG = File.open(module_name + ".v", "w");
 ioTable = [];
 lineCnt = 0;
 CSV.each {|line|
-    if(line[0] != ";")  # ";" starts a comment line.
-        line.chomp!;
-        item = line.split(/\s*,\s*/);
-        if(item.size < 3)
-            print("line #{lineCnt}: Not a valid line.\n");
-        else
-            # process the IO signals
-            if(item[2] == "i")
-                item[2] = "input";
-            elsif(item[2] == "o")
-                item[2] = "output";
-            elsif(item[2] == "io")
-                item[2] = "inout";
-            else
-                raise "Error I/O type @line #{lineCnt}";
-            end
-            ioTable << item;
-        end
-    end
     lineCnt += 1;
+    next if(line[0] == ";")  # ";" starts a comment line.
+    line.chomp!;
+    item = line.split(/\s*,\s*/);
+    if(item.size < 3)
+        print("line #{lineCnt}: Not a valid line.\n");
+    else
+        # process the IO signals
+        if(item[2] == "i")
+            item[2] = "input";
+        elsif(item[2] == "o")
+            item[2] = "output";
+        elsif(item[2] == "io")
+            item[2] = "inout";
+        else
+            raise "Error I/O type @line #{lineCnt}";
+        end
+        ioTable << item;
+    end
 }
 
 # Write the Verilog module description.
