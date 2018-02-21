@@ -5,9 +5,47 @@
 TAB = " " * 4;
 
 # Generate the Verilog codes for a io port.
-def vlg_io_gen(io_name, io_ctrl)
-    VLG << TAB;
-    VLG << "assign #{io_name}";
+# io_name: output port name.
+# io_ctrl: items of output control.
+#   [0]: priority
+#   [1]: output enable control
+#   [2]: output signal
+# The items have been sorted by decreasing priorities.
+# The lowest output enable control is not used in out selection.
+# str: output codes
+def vlg_io_gen(io_name, io_ctrl, str)
+    str << TAB;
+    str << "assign #{io_name} = ";
+    last_item_no = io_ctrl.size - 1;
+    0.upto(last_item_no) {|i|
+        if(i == 0)
+            if(i == last_item_no)
+                str << "#{io_ctrl[i][2]};\n";
+            else
+                str << "#{io_ctrl[i][1]} ? #{io_ctrl[i][2]} :\n";
+            end
+        elsif(i != last_item_no)
+            str << TAB * 3;
+            str << "#{io_ctrl[i][1]} ? #{io_ctrl[i][2]} :\n";
+        else
+            str << TAB * 3;
+            str << "#{io_ctrl[i][2]};\n";
+        end
+    }
+end
+
+# Generate the output enable control codes.
+def vlg_oen_gen(io_name, io_ctrl, str)
+    str << TAB;
+    str << "assign #{io_name}_oen =";
+    last_item_no = io_ctrl.size - 1;
+    0.upto(last_item_no) {|i|
+        if(i != last_item_no)
+            str << " #{io_ctrl[i][1]} |";
+        else
+            str << " #{io_ctrl[i][1]};\n";
+        end
+    }
 end
 
 # Check CSV file: description
@@ -23,6 +61,8 @@ VLG = File.open(module_name + ".v", "w");
 lineCnt = 0;
 io_name = "";
 io_ctrl = [];
+str_o = "";     # output signal codes
+str_oen = "";   # output enable control codes
 CSV.each {|line|
     lineCnt += 1;
     next if(line[0] == ";")  # ";" starts a comment line.
@@ -33,7 +73,8 @@ CSV.each {|line|
         if(io_name == "")   # the first output
             io_name = item[0];
         else    # create the verilog code for the last io
-            vlg_io_gen(io_name, io_ctrl);
+            vlg_io_gen(io_name, io_ctrl, str_o);
+            vlg_oen_gen(io_name, io_ctrl, str_oen);
             io_name = item[0];
             io_ctrl = [];
         end
@@ -60,7 +101,14 @@ CSV.each {|line|
         end
     end
 }
+if(io_name != "")
+    vlg_io_gen(io_name, io_ctrl, str_o);
+    vlg_oen_gen(io_name, io_ctrl, str_oen);
+end
 
 CSV.close;
+VLG << str_o;
+VLG << "\n";
+VLG << str_oen;
 VLG << "\n";
 VLG.close;
