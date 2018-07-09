@@ -31,8 +31,8 @@ initial begin
     #1000 reset_n = 1'b1;
 end*/
 
-initial clk = 1'b0;
-always clk = #100 ~clk;
+//initial clk = 1'b0;
+//always clk = #100 ~clk;
 
 counter u_counter (
         .clk        (clk),
