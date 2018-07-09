@@ -37,6 +37,7 @@ end*/
 counter u_counter (
         .clk        (clk),
         .reset_n    (reset_n),
+        .enable     (1'b0),
         .cnt        (cnt)
         );
 /*
