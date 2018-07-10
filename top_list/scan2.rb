@@ -39,6 +39,9 @@ reg_in = false;         # reg ... ;
 catch_module_state = 0; # module xxx
 catch_reg_state = 0;    # state in reg define line
 catch_wire_state = 0;   # state in wire define line
+# the size of vector, [vector_index_max : vector_index_min]
+vector_index_max = 0;
+vector_index_min = 0;
 
 in_comment = false;
 list_file.each_line {|line|
@@ -104,19 +107,59 @@ list_file.each_line {|line|
                 elsif(reg_in)
                     case(catch_reg_state)
                         when 0
-                            if(token != "[")
+                            if(token == "[")
+                                catch_reg_state = 1;
+                            else
                                 symbol_table << Verilog_symbol.new(token, :reg);
                                 catch_reg_state = 6;
+                            end
+                        when 1
+                            vector_index_max = token.to_i;
+                            catch_reg_state = 2;
+                        when 2 # :
+                            catch_reg_state = 3;
+                        when 3
+                            vector_index_min = token.to_i;
+                            catch_reg_state = 4;
+                        when 4 # ]
+                            catch_reg_state = 5;
+                        when 5
+                            vector_index_min.upto(vector_index_max) {|i|
+                                symbol_table << Verilog_symbol.new(token + "_" + i.to_s, :wire);
+                            }
+                            catch_reg_state = 6;
+                        when 6
+                            if(token == ",")
+                                catch_reg_state = 0;
                             end
                     end
                 elsif(wire_in)
                     case(catch_wire_state)
                         when 0
-                            if(token != "[")
+                            if(token == "[")
+                                catch_wire_state = 1;
+                            else
                                 symbol_table << Verilog_symbol.new(token, :wire);
                                 catch_wire_state = 6;
-                            else
-                                catch_wire_state = 1;
+                            end
+                        when 1
+                            vector_index_max = token.to_i;
+                            catch_wire_state = 2;
+                        when 2 # :
+                            catch_wire_state = 3;
+                        when 3
+                            vector_index_min = token.to_i;
+                            catch_wire_state = 4;
+                        when 4 # ]
+                            catch_wire_state = 5;
+                        when 5
+                            vector_index_min.upto(vector_index_max) {|i|
+                                symbol_table << Verilog_symbol.new(token + "_" + i.to_s, :wire);
+                            }
+                            catch_wire_state = 6;
+                        when 6
+                            if(token == ",")
+                                catch_wire_state = 0;
                             end
                     end
                 end
