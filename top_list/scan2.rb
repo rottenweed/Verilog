@@ -2,11 +2,13 @@
 
 # Verilog symbol
 class Verilog_symbol
-    attr_accessor(:name, :type);
+    attr_reader(:name, :type);
+    attr_accessor(:port_list);
 
     def initialize(name, type)
         @name = name;
         @type = type;
+        @port_list = [];
     end
 end
 
@@ -35,10 +37,12 @@ line_end = false;       # current Verilog line is end, normally by ;
 module_in = false;      # module ... endmodule
 wire_in = false;        # wire ... ;
 reg_in = false;         # reg ... ;
+module_inst_in = false; # <module_type> <module_name> (...);
 # symbol type status
-catch_module_state = 0; # module xxx
-catch_reg_state = 0;    # state in reg define line
-catch_wire_state = 0;   # state in wire define line
+state_catch_module = 0; # module xxx
+state_catch_reg = 0;    # state in reg define line
+state_catch_wire = 0;   # state in wire define line
+state_module_inst = 0;  # state in module instance
 # the size of vector, [vector_index_max : vector_index_min]
 vector_index_max = 0;
 vector_index_min = 0;
@@ -77,8 +81,10 @@ list_file.each_line {|line|
                 line_end = true;    # end the Verilog line
                 reg_in = false;
                 wire_in = false;
-                catch_reg_state = 0;
-                line_stream.delete_at(-1);
+                module_inst_in = false;
+                state_catch_reg = 0;
+                state_catch_wire = 0;
+                state_module_inst = 0;
             when(:pre)
                 line_pre_command = true;
             when(:key_r)
@@ -90,78 +96,108 @@ list_file.each_line {|line|
                 line_stream.delete_at(-1);
             when(:module)
                 module_in = true;
-                catch_module_state = 0;
+                state_catch_module = 0;
             when(:endmodule)
                 module_in = false;
-                catch_module_state = 0;
+                state_catch_module = 0;
                 line_end = true;
             when(:reg)
                 reg_in = true;
-                catch_reg_state = 0;
+                state_catch_reg = 0;
             when(:wire)
                 wire_in = true;
             else
-                if(module_in && (catch_module_state == 0))
+                if(line_pre_command)
+                    ;   # not process ` line
+                elsif(module_in && (state_catch_module == 0))
                     symbol_table << Verilog_symbol.new(token, :module);
-                    catch_module_state = 1;
+                    state_catch_module = 1;
                 elsif(reg_in)
-                    case(catch_reg_state)
+                    case(state_catch_reg)
                         when 0
                             if(token == "[")
-                                catch_reg_state = 1;
+                                state_catch_reg = 1;
                             else
                                 symbol_table << Verilog_symbol.new(token, :reg);
-                                catch_reg_state = 6;
+                                state_catch_reg = 6;
                             end
                         when 1
                             vector_index_max = token.to_i;
-                            catch_reg_state = 2;
+                            state_catch_reg = 2;
                         when 2 # :
-                            catch_reg_state = 3;
+                            state_catch_reg = 3;
                         when 3
                             vector_index_min = token.to_i;
-                            catch_reg_state = 4;
+                            state_catch_reg = 4;
                         when 4 # ]
-                            catch_reg_state = 5;
+                            state_catch_reg = 5;
                         when 5
                             vector_index_min.upto(vector_index_max) {|i|
                                 symbol_table << Verilog_symbol.new(token + "_" + i.to_s, :wire);
                             }
-                            catch_reg_state = 6;
+                            state_catch_reg = 6;
                         when 6
                             if(token == ",")
-                                catch_reg_state = 0;
+                                state_catch_reg = 0;
                             end
                     end
                 elsif(wire_in)
-                    case(catch_wire_state)
+                    case(state_catch_wire)
                         when 0
                             if(token == "[")
-                                catch_wire_state = 1;
+                                state_catch_wire = 1;
                             else
                                 symbol_table << Verilog_symbol.new(token, :wire);
-                                catch_wire_state = 6;
+                                state_catch_wire = 6;
                             end
                         when 1
                             vector_index_max = token.to_i;
-                            catch_wire_state = 2;
+                            state_catch_wire = 2;
                         when 2 # :
-                            catch_wire_state = 3;
+                            state_catch_wire = 3;
                         when 3
                             vector_index_min = token.to_i;
-                            catch_wire_state = 4;
+                            state_catch_wire = 4;
                         when 4 # ]
-                            catch_wire_state = 5;
+                            state_catch_wire = 5;
                         when 5
                             vector_index_min.upto(vector_index_max) {|i|
                                 symbol_table << Verilog_symbol.new(token + "_" + i.to_s, :wire);
                             }
-                            catch_wire_state = 6;
+                            state_catch_wire = 6;
                         when 6
                             if(token == ",")
-                                catch_wire_state = 0;
+                                state_catch_wire = 0;
                             end
                     end
+                elsif(module_inst_in)
+                    case(state_module_inst)
+                        when 1
+                            symbol_table << Verilog_symbol.new(token, :module_inst);
+                            state_module_inst = 2;
+                        when 2 # "("
+                            state_module_inst = 3;
+                        when 3 # "."
+                            state_module_inst = 4;
+                        when 4 # <port name>
+                            symbol_table[-1].port_list << token;
+                            state_module_inst = 5;
+                        when 5 # "("
+                            state_module_inst = 6;
+                        when 6 # connection
+                            state_module_inst = 7;
+                        when 7 # ")"
+                            state_module_inst = 8;
+                        when 8
+                            if(token == ",")
+                                state_module_inst = 3;
+                            elsif(token == ")")
+                                state_module_inst = 0;
+                            end
+                    end
+                elsif(token =~ /[_a-zA-Z]\w*/) # module instance start
+                    module_inst_in = true;
+                    state_module_inst = 1;
                 end
         end
     end
@@ -181,6 +217,9 @@ print("Total line count = #{line_no}\n");
 Log.print("\nVerilog item list: \n");
 symbol_table.each {|item|
     Log.print(item.name, " : ", item.type, "\n");
+    if(item.port_list.size > 0)
+        Log.print("\t#{item.port_list}\n");
+    end
 }
 list_file.close;
 
